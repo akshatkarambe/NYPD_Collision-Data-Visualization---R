@@ -1,0 +1,440 @@
+---
+title: "Project:1_NYPD_Collision"
+author: "Akshat Karambe and Jagruthi Thekkada"
+date: "26 February 2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+Loading the Data
+```{r}
+v <- read.csv("D:/Sem3/Data Viz/Project1/NYPD_Motor_Vehicle_Collisions.csv")
+col <- v
+str(v)
+```
+
+Libraries and Packages
+```{r}
+#install.packages("tidyverse")
+library(dplyr)
+library(plotly)
+library(highcharter)
+library(lubridate)
+library(ggthemes)
+library(tidyr)
+library(viridis)
+library(ggplot2)
+library(flexdashboard)
+library(tidyverse)
+library(lubridate)
+library(plotly)
+library(treemapify)
+library(dplyr)
+```
+
+#Adding Required Year,Month, Days and hours Columns to the dataframe
+```{r}
+col$DATE_TIME <- paste(col$DATE,col$TIME)
+col$DATE <- mdy(col$DATE)
+col$DATE_TIME <-mdy_hm(col$DATE_TIME)
+col$day <- wday(col$DATE_TIME,label = T)
+col$month <- month(col$DATE_TIME,label = T)
+col$hour <- hour(col$DATE_TIME)
+col$year <- year(col$DATE_TIME)
+```
+
+#DataFrames for Timeseries Plots of Year, Month, Day & Hour
+```{r}
+#Filtering the data
+col_year<- col %>% count(year, BOROUGH)
+col_month <- col %>% count(month, BOROUGH)
+col_day <- col %>% count(day, BOROUGH)
+col_hour <- col %>% count(hour, BOROUGH)
+col_year <- col_year[-which(col_year$BOROUGH==""),]
+col_month <- col_month[-which(col_month$BOROUGH==""),]
+col_day <- col_day[-which(col_day$BOROUGH==""),]
+col_hour <- col_hour[-which(col_hour$BOROUGH==""),]
+```
+
+Line chart and Bar plots by years
+```{r}
+plot_ly(col_year, 
+    x = ~year,
+    y = ~n,
+    color=~BOROUGH,
+    type = 'scatter', 
+    mode = 'lines'
+) %>%
+layout(
+    xaxis = list(title = "Year"),
+    yaxis = list (title = "Total Collisions")
+)
+
+#Collision of by borough over years
+ggplot(col_year, aes(x = factor(BOROUGH), y = n, fill = BOROUGH)) + geom_bar(stat = "identity") + facet_grid(.~year) +theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5)) + geom_text(aes(label=n), vjust=1.5, colour="black",position=position_dodge(.9), size=3) +xlab("Boroughs")+ylab("Total Collisions")
+
+
+#Particularly for the 2016 significant collision number drop, it's mainly because of the successful Vision Zero campaign launched by the city government.
+```
+
+
+Line chart and Bar plots by MonthS
+```{r}
+plot_ly(col_month, 
+    x = ~month,
+    y = ~n,
+    color=~BOROUGH,
+    type = 'scatter', 
+    mode = 'lines'
+) %>%
+layout(
+    xaxis = list(title = "Months"),
+    yaxis = list (title = "Total Collisions")
+)
+
+ggplot(col_month, aes(x = factor(month), y = n, fill = month)) + geom_bar(stat = "identity") + facet_grid(.~BOROUGH) +theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5)) +xlab("Boroughs")+ylab("Total Collisions")
+```
+
+Line chart and Bar plots by Days
+```{r}
+plot_ly(col_day, 
+    x = ~day,
+    y = ~n,
+    color=~BOROUGH,
+    type = 'scatter', 
+    mode = 'lines'
+) %>%
+layout(
+    xaxis = list(title = "Days"),
+    yaxis = list (title = "Total Collisions")
+)
+
+ggplot(col_day, aes(x = day, y = n, fill = day)) + geom_bar(position="dodge",stat = "identity") + facet_grid(.~BOROUGH)+ theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5))+xlab("Boroughs")+ylab("Total Collisions")
+
+```
+
+
+Line chart and Bar plots by Hours
+```{r}
+plot_ly(col_hour, 
+    x = ~factor(hour),
+    y = ~n,
+    color=~BOROUGH,
+    type = 'scatter', 
+    mode = 'lines'
+) %>%
+layout(
+    xaxis = list(title = "Hours"),
+    yaxis = list (title = "Total Collisions")
+)
+
+
+ggplot(col_hour, aes(x = factor(hour), y = n, fill = hour)) + geom_bar(stat = "identity")+ggtitle("Collisions by hours") +xlab("Hours")+ylab("Total Collisions")
+# A sudden dip at around 15hrs 
+
+```
+
+
+
+
+
+#Pie Chart: Killed vs Injured vs Not_Hurt
+```{r}
+
+a <- filter(col,NUMBER.OF.PERSONS.INJURED=="0")
+a$NUMBER.OF.PERSONS.INJURED[a$NUMBER.OF.PERSONS.INJURED=="0"] <- 1
+
+No_Hurt <- a %>% select(BOROUGH,year,NUMBER.OF.PERSONS.INJURED,day,hour) %>% gather(type,value,3) %>% group_by(type,year) %>% summarise(n=sum(value,na.rm=T))
+
+No_Hurt$type[No_Hurt$type=="NUMBER.OF.PERSONS.INJURED"] <- "Not Hurt"
+
+KI <- col %>% select(BOROUGH,year,NUMBER.OF.PERSONS.KILLED,NUMBER.OF.PERSONS.INJURED,day,hour) %>% gather(type,value,3:4) %>% group_by(type,year) %>% summarise(n=sum(value,na.rm=T))
+
+KI$type[KI$type=="NUMBER.OF.PERSONS.KILLED"] = "Killed"
+KI$type[KI$type=="NUMBER.OF.PERSONS.INJURED"] = "INJURED"
+KINH <- rbind(KI,No_Hurt)
+
+KINH <- KINH %>% group_by(type) %>% summarise(n=sum(n,na.rm=T))
+
+pie = ggplot(KINH, aes(x="", y=n, fill=type)) + geom_bar(stat="identity", width=1)
+
+round(KINH$n/sum(KINH$n)*100, digits = 2) 
+
+pie = pie + coord_polar("y", start=0) + geom_text(aes(label = paste0(round(KINH$n/sum(KINH$n)*100, digits = 2), "%")), position = position_stack(vjust = 0.5))
+
+pie = pie + scale_fill_manual(values=c("#F6AE2D", "#F26419", "#999999"))
+pie = pie + labs(x = NULL, y = NULL, fill = NULL, title = "Collision Severity Composition")
+
+pie = pie + theme_classic() + theme(axis.line = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          plot.title = element_text(hjust = 0.5, color = "#666666"))
+
+pie
+```
+
+
+Bar Graph: Comparison between Cyclist, Pedestrian, Motorist Killed
+```{r}
+
+#Killed
+
+CPM_Killed <- col %>% select(BOROUGH,NUMBER.OF.MOTORIST.KILLED,NUMBER.OF.CYCLIST.KILLED,NUMBER.OF.PEDESTRIANS.KILLED,day,hour) %>% gather(type,value,2:4) %>% group_by(BOROUGH,type) %>% summarise(n=sum(value,na.rm=T)) %>% filter(BOROUGH!="") 
+
+CPM_Killed$type[CPM_Killed$type=="NUMBER.OF.MOTORIST.KILLED"] = "Motorist Killed"
+CPM_Killed$type[CPM_Killed$type=="NUMBER.OF.CYCLIST.KILLED"] = "Cyclist Killed"
+CPM_Killed$type[CPM_Killed$type=="NUMBER.OF.PEDESTRIANS.KILLED"] = "Pedestrians Killed"
+
+ggplot(CPM_Killed,aes(x = type, y = n, fill = type)) + geom_bar(stat = "identity") + facet_grid(.~BOROUGH) +theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5)) + xlab("Types")+ylab("Total Killed")
+```
+
+Bar Graph: Comparison between Cyclist, Pedestrian, Motorist Injured
+```{r}
+#Injured
+CMP_Injured<- col %>% select(BOROUGH,NUMBER.OF.MOTORIST.INJURED,NUMBER.OF.CYCLIST.INJURED,NUMBER.OF.PEDESTRIANS.INJURED,day,hour) %>% gather(type,value,2:4) %>% group_by(BOROUGH,type) %>% summarise(n=sum(value,na.rm=T)) %>% filter(BOROUGH!="") 
+
+CMP_Injured$type[CMP_Injured$type=="NUMBER.OF.MOTORIST.INJURED"] = "Motorist Injured"
+CMP_Injured$type[CMP_Injured$type=="NUMBER.OF.CYCLIST.INJURED"] = "Cyclist Injured"
+CMP_Injured$type[CMP_Injured$type=="NUMBER.OF.PEDESTRIANS.INJURED"] = "Pedestrians Injured"
+
+ggplot(CMP_Injured,aes(x = type, y = n, fill = type)) + geom_bar(stat = "identity") + facet_grid(.~BOROUGH) +theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5))+ xlab("Types")+ylab("Total Injured")
+```
+
+
+
+Day Wise and Hour Wise Collision Summary of Motorist, Cyclist, Pedestrian
+```{r}
+
+DH_Injury_Summary <- col %>% select(BOROUGH,DATE,NUMBER.OF.MOTORIST.INJURED,NUMBER.OF.CYCLIST.INJURED,NUMBER.OF.PEDESTRIANS.INJURED,day,hour) %>% gather(type,value,3:5) %>% group_by(BOROUGH,type,day,hour) %>% summarise(n=sum(value,na.rm=T))
+
+DH_Injury_Summary <- filter(DH_Injury_Summary,BOROUGH!="")
+
+DH_Injury_Summary$type[DH_Injury_Summary$type=="NUMBER.OF.MOTORIST.INJURED"] = "Motorist Collision"
+DH_Injury_Summary$type[DH_Injury_Summary$type=="NUMBER.OF.CYCLIST.INJURED"] = "Cyclist Collision"
+DH_Injury_Summary$type[DH_Injury_Summary$type=="NUMBER.OF.PEDESTRIANS.INJURED"] = "Pedestrians Collision"
+
+
+DH_Kill_Summary <- col%>% select(BOROUGH,DATE,NUMBER.OF.MOTORIST.KILLED,NUMBER.OF.CYCLIST.KILLED,NUMBER.OF.PEDESTRIANS.KILLED,day,hour) %>% gather(type,value,3:5) %>% group_by(BOROUGH,type,day,hour) %>% summarise(n=sum(value,na.rm=T))
+
+DH_Kill_Summary <- filter(DH_Kill_Summary,BOROUGH!="")
+
+DH_Kill_Summary$type[DH_Kill_Summary$type=="NUMBER.OF.MOTORIST.KILLED"] = "Motorist Collision"
+DH_Kill_Summary$type[DH_Kill_Summary$type=="NUMBER.OF.CYCLIST.KILLED"] = "Cyclist Collision"
+DH_Kill_Summary$type[DH_Kill_Summary$type=="NUMBER.OF.PEDESTRIANS.KILLED"] = "Pedestrians Collision"
+
+DH_Summary <- rbind(DH_Injury_Summary,DH_Kill_Summary )
+
+DH_Summary_HeatMap <-ggplot(DH_Injury_Summary,aes(day,hour,fill=(log(n))))+
+  geom_tile(color= "white",size=0.1) + 
+  scale_fill_viridis(name="Total Injuries by Type",option ="C")
+DH_Summary_HeatMap <-DH_Summary_HeatMap + facet_grid(BOROUGH~type)
+DH_Summary_HeatMap <-DH_Summary_HeatMap + scale_y_continuous(trans = "reverse", breaks = c(0,4,8,12,16,20))
+#p <-p + scale_x_continuous(breaks =c(1,10,20,31))
+DH_Summary_HeatMap <-DH_Summary_HeatMap + theme_minimal(base_size = 8)
+DH_Summary_HeatMap <-DH_Summary_HeatMap + labs(title= paste("Total Hourly and Daily Injuries by type"), x="Day", y="Hour")
+DH_Summary_HeatMap <-DH_Summary_HeatMap + theme(legend.position = "bottom")+
+  theme(plot.title=element_text(size = 14))+
+  theme(axis.text.y=element_text(size=6)) +
+  theme(strip.background = element_rect(colour="gray"))+
+  theme(plot.title=element_text(hjust=0))+
+  theme(axis.ticks=element_blank())+
+  theme(axis.text=element_text(size=7))+
+  theme(legend.title=element_text(size=8))+
+  theme(legend.text=element_text(size=6))+
+  theme(plot.title=element_text(size=18),axis.text.x = element_text(angle=90, vjust=1))
+DH_Summary_HeatMap
+```
+
+
+Day Wise and Hour Wise Killed Summary of Motorist, Cyclist, Pedestrian
+```{r}
+
+DH_Kill_Summary <- col%>% select(BOROUGH,DATE,NUMBER.OF.MOTORIST.KILLED,NUMBER.OF.CYCLIST.KILLED,NUMBER.OF.PEDESTRIANS.KILLED,day,hour) %>% gather(type,value,3:5) %>% group_by(BOROUGH,type,day,hour) %>% summarise(n=sum(value,na.rm=T))
+
+DH_Kill_Summary <- filter(DH_Kill_Summary,BOROUGH!="")
+
+DH_Kill_Summary$type[DH_Kill_Summary$type=="NUMBER.OF.MOTORIST.KILLED"] = "Motorist Killed"
+DH_Kill_Summary$type[DH_Kill_Summary$type=="NUMBER.OF.CYCLIST.KILLED"] = "Cyclist Killed"
+DH_Kill_Summary$type[DH_Kill_Summary$type=="NUMBER.OF.PEDESTRIANS.KILLED"] = "Pedestrians Killed"
+
+DH_Kill_HeatMap <-ggplot(DH_Kill_Summary,aes(day,hour,fill=(n)))+
+  geom_tile(color= "white",size=0.1) + 
+  scale_fill_viridis(name="Total Death by Type",option ="C")
+DH_Kill_HeatMap <-DH_Kill_HeatMap + facet_grid(BOROUGH~type)
+DH_Kill_HeatMap <-DH_Kill_HeatMap + scale_y_continuous(trans = "reverse", breaks = c(0,4,8,12,16,20))
+#p <-p + scale_x_continuous(breaks =c(1,10,20,31))
+DH_Kill_HeatMap <-DH_Kill_HeatMap + theme_minimal(base_size = 8)
+DH_Kill_HeatMap <-DH_Kill_HeatMap + labs(title= paste("Total Hourly Deaths Due to Accidents"), x="Day", y="Hour")
+DH_Kill_HeatMap <-DH_Kill_HeatMap + theme(legend.position = "bottom")+
+  theme(plot.title=element_text(size = 14))+
+  theme(axis.text.y=element_text(size=6)) +
+  theme(strip.background = element_rect(colour="gray"))+
+  theme(plot.title=element_text(hjust=0))+
+  theme(axis.ticks=element_blank())+
+  theme(axis.text=element_text(size=7))+
+  theme(legend.title=element_text(size=8))+
+  theme(legend.text=element_text(size=6))+
+  theme(plot.title=element_text(size=18),axis.text.x = element_text(angle=90, vjust=1))
+DH_Kill_HeatMap
+
+```
+
+
+
+
+Day Wise and Hour Wise Injury Summary of Motorist, Cyclist, Pedestrian
+```{r}
+DH_Injury_Summary <- col %>% select(BOROUGH,DATE,NUMBER.OF.MOTORIST.INJURED,NUMBER.OF.CYCLIST.INJURED,NUMBER.OF.PEDESTRIANS.INJURED,day,hour) %>% gather(type,value,3:5) %>% group_by(BOROUGH,type,day,hour) %>% summarise(n=sum(value,na.rm=T))
+
+DH_Injury_Summary <- filter(DH_Injury_Summary,BOROUGH!="")
+
+
+DH_Injury_Summary$type[DH_Injury_Summary$type=="NUMBER.OF.MOTORIST.INJURED"] = "Motorist Injured"
+DH_Injury_Summary$type[DH_Injury_Summary$type=="NUMBER.OF.CYCLIST.INJURED"] = "Cyclist Injured"
+DH_Injury_Summary$type[DH_Injury_Summary$type=="NUMBER.OF.PEDESTRIANS.INJURED"] = "Pedestrians Injured"
+
+DH_Injury_HeatMap <-ggplot(DH_Injury_Summary,aes(day,hour,fill=(n)))+
+  geom_tile(color= "white",size=0.1) + 
+  scale_fill_viridis(name="Mean Injury by Type",option ="C")
+DH_Injury_HeatMap <-DH_Injury_HeatMap + facet_grid(BOROUGH~type)
+DH_Injury_HeatMap <-DH_Injury_HeatMap + scale_y_continuous(trans = "reverse", breaks = c(0,4,8,12,16,20))
+#p <-p + scale_x_continuous(breaks =c(1,10,20,31))
+DH_Injury_HeatMap <-DH_Injury_HeatMap + theme_minimal(base_size = 8)
+DH_Injury_HeatMap <-DH_Injury_HeatMap + labs(title= paste("Total Hourly Injuries Due to Accidents"), x="Day", y="Hour")
+DH_Injury_HeatMap <-DH_Injury_HeatMap + theme(legend.position = "bottom")+
+  theme(plot.title=element_text(size = 14))+
+  theme(axis.text.y=element_text(size=6)) +
+  theme(strip.background = element_rect(colour="gray"))+
+  theme(plot.title=element_text(hjust=0))+
+  theme(axis.ticks=element_blank())+
+  theme(axis.text=element_text(size=7))+
+  theme(legend.title=element_text(size=8))+
+  theme(legend.text=element_text(size=6))+
+  theme(plot.title=element_text(size=18),axis.text.x = element_text(angle=90, vjust=1))
+
+DH_Injury_HeatMap
+```
+
+
+Causes of Collisions,People Killed & Injured
+```{r}
+
+
+cause_KI <- col %>% select(NUMBER.OF.PERSONS.KILLED,NUMBER.OF.PERSONS.INJURED,CONTRIBUTING.FACTOR.VEHICLE.1,CONTRIBUTING.FACTOR.VEHICLE.2,CONTRIBUTING.FACTOR.VEHICLE.3,CONTRIBUTING.FACTOR.VEHICLE.4,CONTRIBUTING.FACTOR.VEHICLE.5, BOROUGH) %>% gather(type,value,1:2) %>% gather(vehicle_type,cause,1:5) %>% filter(value!=0,cause!="",cause!="Unspecified") 
+
+cause_KI$type[cause_KI$type=="NUMBER.OF.PERSONS.INJURED"] <- "Injured"
+cause_KI$type[cause_KI$type=="NUMBER.OF.PERSONS.KILLED"] <- "Killed"
+
+cause_Kill_Inj <- cause_KI %>% select(-vehicle_type) %>% group_by(type,cause) %>% summarise(total=sum(value,na.rm=T))
+
+
+cause_killed <- cause_Kill_Inj[which(cause_Kill_Inj$type=="Killed"),]
+cause_killed <- cause_killed[order(-cause_killed$total), ]
+cause_killed <- cause_killed[1:20,]
+
+cause_Injured <- cause_Kill_Inj[which(cause_Kill_Inj$type=="Injured"),]
+
+
+merge_cause <- merge(x = cause_Injured, y = cause_killed, by = "cause", all.y = TRUE)
+merge_cause <- merge_cause[,1:3]
+
+names(merge_cause)[2]<-paste("type")
+names(merge_cause)[3]<-paste("total")
+
+cause_Injured <- merge_cause
+
+cause_Injured <- cause_Injured[,c(2,1,3)]
+
+cause_killed <- as.data.frame(cause_killed)
+
+cause_KI_comparision <- rbind(cause_Injured,cause_killed)
+
+ggplot(data = cause_KI_comparision, aes(x = reorder(cause, log(total)), y = log(total), fill = type)) +
+  geom_bar(data = subset(cause_KI_comparision, type=="Killed"),
+           stat = "identity") +
+  geom_bar(data = subset(cause_KI_comparision, type=="Injured"),
+           stat = "identity",
+           position = "identity",
+           mapping = aes(y = -log(total))) +
+  scale_y_continuous(labels = abs) +
+  coord_flip()+ggtitle('Top 20 Causes of Collisions')+xlab("Causes")+ylab("Casualties")
+
+
+
+
+```
+
+vehicals:Collision
+```{r}
+vehical_KI <- col %>% select(NUMBER.OF.PERSONS.KILLED,NUMBER.OF.PERSONS.INJURED,VEHICLE.TYPE.CODE.1,VEHICLE.TYPE.CODE.2,VEHICLE.TYPE.CODE.3,VEHICLE.TYPE.CODE.4,VEHICLE.TYPE.CODE.5, BOROUGH) %>% gather(type,value,1:2) %>% gather(vehicle_type,cause,1:5) %>% filter(value!=0,cause!="",cause!="Unspecified") 
+
+vehical_KI$type[vehical_KI$type=="NUMBER.OF.PERSONS.INJURED"] <- "Injured"
+vehical_KI$type[vehical_KI$type=="NUMBER.OF.PERSONS.KILLED"] <- "Killed"
+
+vehical_KI$cause <- toupper(vehical_KI$cause)
+
+vehical_KI$cause[vehical_KI$cause=="BIKE"] <- "BICYCLE"
+vehical_KI$cause[vehical_KI$cause=="STATION WAGON/SPORT UTILITY VEHICLE"] <- "SPORT UTILITY / STATION WAGON"
+
+
+
+Vehical_Kill_Inj <- vehical_KI %>% select(-c(vehicle_type)) %>% group_by(type,cause) %>% summarise(total=sum(value,na.rm=T))
+
+Vehical_Kill_Inj <- Vehical_Kill_Inj[order(-Vehical_Kill_Inj$total), ]
+
+Vehical_Kill_Inj <- Vehical_Kill_Inj[- grep("UNKNOWN", Vehical_Kill_Inj$cause),]
+Vehical_Kill_Inj <- Vehical_Kill_Inj[- grep("OTHER", Vehical_Kill_Inj$cause),]
+
+Vehical_Kill_Inj <- Vehical_Kill_Inj[1:15,]
+
+ggplot(Vehical_Kill_Inj, aes(area=total,label=cause,fill=total))+geom_treemap()+ geom_treemap_text(fontface = "italic", colour = "white", place = "centre",grow = FALSE)+ggtitle("Top 15 Vehicals involved in all the collisions")
+
+
+```
+
+#Extra
+```{r}
+
+#Injured
+CMP_Injured<- col %>% select(BOROUGH,NUMBER.OF.MOTORIST.INJURED,NUMBER.OF.CYCLIST.INJURED,NUMBER.OF.PEDESTRIANS.INJURED) %>% gather(type,value,2:4) %>% group_by(BOROUGH,type) %>% summarise(n=sum(value,na.rm=T)) %>% filter(BOROUGH!="") 
+
+
+CPM_Vehical <-col %>% select(NUMBER.OF.MOTORIST.INJURED,NUMBER.OF.CYCLIST.INJURED,NUMBER.OF.PEDESTRIANS.INJURED,VEHICLE.TYPE.CODE.1,VEHICLE.TYPE.CODE.2,VEHICLE.TYPE.CODE.3,VEHICLE.TYPE.CODE.4,VEHICLE.TYPE.CODE.5) %>% gather(type,value,1:3) %>% gather(vehicle_type,cause,1:5) %>% filter(value!=0,cause!="",cause!="Unspecified") 
+
+CPM_Vehical$type[CPM_Vehical$type=="NUMBER.OF.MOTORIST.INJURED"] = "Motorist Injured"
+CPM_Vehical$type[CPM_Vehical$type=="NUMBER.OF.CYCLIST.INJURED"] = "Cyclist Injured"
+CPM_Vehical$type[CPM_Vehical$type=="NUMBER.OF.PEDESTRIANS.INJURED"] = "Pedestrians Injured"
+
+CPM_Vehical$cause <- toupper(CPM_Vehical$cause)
+
+CPM_Vehical$cause[CPM_Vehical$cause=="BIKE"] <- "BICYCLE"
+CPM_Vehical$cause[CPM_Vehical$cause=="STATION WAGON/SPORT UTILITY VEHICLE"] <- "SPORT UTILITY / STATION WAGON"
+
+
+CPM_Vehical <- CPM_Vehical %>% select(-c(vehicle_type)) %>% group_by(type,cause) %>% summarise(total=sum(value,na.rm=T))
+
+
+CPM_Vehical_Cyl <- CPM_Vehical[which(CPM_Vehical$type=="Cyclist Injured"),]
+CPM_Vehical_Cyl <- CPM_Vehical_Cyl[order(-CPM_Vehical_Cyl$total), ]
+CPM_Vehical_Cyl <- CPM_Vehical_Cyl[1:5,]
+
+
+CPM_Vehical_Ped <- CPM_Vehical[which(CPM_Vehical$type=="Pedestrians Injured"),]
+CPM_Vehical_Ped <- CPM_Vehical_Ped[order(-CPM_Vehical_Ped$total), ]
+CPM_Vehical_Ped <- CPM_Vehical_Ped[1:5,]
+```
+
+#Extra 
+```{r}
+Streets <- col %>% select(BOROUGH,NUMBER.OF.PERSONS.KILLED,NUMBER.OF.PERSONS.INJURED,ON.STREET.NAME) %>% gather(type,value,2:3) %>% group_by(BOROUGH,ON.STREET.NAME) %>% summarise(n=sum(value,na.rm=T)) %>% filter(BOROUGH!="")%>% filter(ON.STREET.NAME!="") 
+
+Streets_Bronx <- Streets[which(Streets$BOROUGH=="BRONX"),]
+Streets_Bronx <- Streets_Bronx[order(-Streets_Bronx$n), ]
+CPM_Vehical_Cyl <- CPM_Vehical_Cyl[1:5,]
+
+```
+
+
+
